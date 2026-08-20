@@ -156,12 +156,15 @@ const MediaGridPage = ({
     const c: Record<string, number> = {};
     for (const t of tabs) c[t.id] = 0;
     for (const item of data?.items ?? []) {
+      if (typeFilter !== 'all' && item.mediaType !== typeFilter) {
+        continue; // tab counts answer "how many, given the current type filter"
+      }
       for (const t of tabs) {
         if (t.filter(item)) c[t.id]++;
       }
     }
     return c;
-  }, [data, tabs]);
+  }, [data, tabs, typeFilter]);
 
   const items = useMemo(() => {
     const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0];
