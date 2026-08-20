@@ -21,6 +21,12 @@ export class AddMediaMetadataTable1787235643102 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "temporary_user_push_subscription" RENAME TO "user_push_subscription"`);
         await queryRunner.query(`CREATE INDEX "IDX_03f7958328e311761b0de675fb" ON "user_push_subscription" ("userId") `);
         await queryRunner.query(`DROP INDEX "IDX_e73d28c1e5e3c85125163f7c9c"`);
+        // Scans that ran before the cross-listed-specials fix could write two
+        // rows for one (season, episode) — e.g. an OVA cross-listed into a
+        // season colliding with the real episode 1. Dedupe (keep the oldest)
+        // before the UNIQUE constraint below lands; the fixed scanner rewrites
+        // correct rows on its next pass.
+        await queryRunner.query(`DELETE FROM "episode" WHERE "id" NOT IN (SELECT MIN("id") FROM "episode" GROUP BY "seasonId", "episodeNumber")`);
         await queryRunner.query(`CREATE TABLE "temporary_episode" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, "episodeNumber" integer NOT NULL, "status" integer NOT NULL DEFAULT (1), "status4k" integer NOT NULL DEFAULT (1), "createdAt" datetime NOT NULL DEFAULT (CURRENT_TIMESTAMP), "updatedAt" datetime NOT NULL DEFAULT (CURRENT_TIMESTAMP), "seasonId" integer, CONSTRAINT "UQ_619ebf32ab6d66ecab8cc9ba7b3" UNIQUE ("seasonId", "episodeNumber"), CONSTRAINT "FK_e73d28c1e5e3c85125163f7c9cd" FOREIGN KEY ("seasonId") REFERENCES "season" ("id") ON DELETE CASCADE ON UPDATE NO ACTION)`);
         await queryRunner.query(`INSERT INTO "temporary_episode"("id", "episodeNumber", "status", "status4k", "createdAt", "updatedAt", "seasonId") SELECT "id", "episodeNumber", "status", "status4k", "createdAt", "updatedAt", "seasonId" FROM "episode"`);
         await queryRunner.query(`DROP TABLE "episode"`);
