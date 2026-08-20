@@ -5,6 +5,7 @@ import {
 } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import MediaFlag from '@server/entity/MediaFlag';
 import { MediaRequest } from '@server/entity/MediaRequest';
 import Season from '@server/entity/Season';
 import SeasonRequest from '@server/entity/SeasonRequest';
@@ -180,6 +181,26 @@ export class MediaSubscriber implements EntitySubscriberInterface<Media> {
   public async afterUpdate(event: UpdateEvent<Media>): Promise<void> {
     if (!event.entity || !event.databaseEntity) {
       return;
+    }
+
+    // 'downloading' is a user mark meaning "actively grabbing this" — once
+    // the title actually reaches the library it has served its purpose.
+    // (dash rule: auto-clear on arrival; 'tobuy' is never auto-cleared.)
+    if (
+      event.entity.status === MediaStatus.AVAILABLE &&
+      event.databaseEntity.status !== MediaStatus.AVAILABLE
+    ) {
+      try {
+        await event.manager.getRepository(MediaFlag).delete({
+          tmdbId: event.entity.tmdbId,
+          mediaType: event.entity.mediaType,
+          flag: 'downloading',
+        });
+      } catch (e) {
+        logger.warn(`Failed to auto-clear downloading flag: ${e.message}`, {
+          label: 'Media Subscriber',
+        });
+      }
     }
 
     const validStatuses = [

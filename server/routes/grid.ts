@@ -1,6 +1,7 @@
 import { MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import MediaFlag from '@server/entity/MediaFlag';
 import MediaMetadata from '@server/entity/MediaMetadata';
 import { MediaRequest } from '@server/entity/MediaRequest';
 import metadataRefresh from '@server/lib/metadatarefresh';
@@ -22,16 +23,22 @@ gridRoutes.get('/', async (req, res, next) => {
     const mediaRepository = getRepository(Media);
     const metadataRepository = getRepository(MediaMetadata);
 
-    const [media, metadataRows] = await Promise.all([
+    const [media, metadataRows, flagRows] = await Promise.all([
       mediaRepository.find({
         relations: { seasons: true, requests: { seasons: true } },
       }),
       metadataRepository.find(),
+      getRepository(MediaFlag).find(),
     ]);
 
     const metaByKey = new Map(
       metadataRows.map((row) => [`${row.mediaType}:${row.tmdbId}`, row])
     );
+    const flagsByKey = new Map<string, string[]>();
+    for (const f of flagRows) {
+      const key = `${f.mediaType}:${f.tmdbId}`;
+      flagsByKey.set(key, [...(flagsByKey.get(key) ?? []), f.flag]);
+    }
 
     const items = media.map((m) => {
       const meta = metaByKey.get(`${m.mediaType}:${m.tmdbId}`);
@@ -61,6 +68,7 @@ gridRoutes.get('/', async (req, res, next) => {
             (min, r) => (!min || r.createdAt < min ? r.createdAt : min),
             null
           ) ?? null,
+        flags: flagsByKey.get(`${m.mediaType}:${m.tmdbId}`) ?? [],
         metadata: meta
           ? {
               title: meta.title,
@@ -128,6 +136,30 @@ gridRoutes.post('/ack-new-seasons/:mediaType/:tmdbId', async (req, res, next) =>
       Number(req.params.tmdbId)
     );
     return res.status(200).json({ ok: true });
+  } catch (e) {
+    return next({ status: 500, message: e.message });
+  }
+});
+
+/** Toggle a user flag ('downloading' | 'tobuy') on a title. */
+gridRoutes.post('/flag/:mediaType/:tmdbId/:flag', async (req, res, next) => {
+  const mediaType = req.params.mediaType === 'tv' ? 'tv' : 'movie';
+  const tmdbId = Number(req.params.tmdbId);
+  const flag = req.params.flag;
+  if (!['downloading', 'tobuy'].includes(flag) || isNaN(tmdbId)) {
+    return next({ status: 400, message: 'Unknown flag or bad tmdbId.' });
+  }
+  try {
+    const flagRepository = getRepository(MediaFlag);
+    const existing = await flagRepository.findOne({
+      where: { tmdbId, mediaType, flag },
+    });
+    if (existing) {
+      await flagRepository.remove(existing);
+      return res.status(200).json({ flag, set: false });
+    }
+    await flagRepository.save(new MediaFlag({ tmdbId, mediaType, flag }));
+    return res.status(200).json({ flag, set: true });
   } catch (e) {
     return next({ status: 500, message: e.message });
   }

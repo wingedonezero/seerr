@@ -26,6 +26,16 @@ const tabs: GridTab[] = [
     filter: (i: GridItem) => i.status === MediaStatus.PARTIALLY_AVAILABLE,
   },
   {
+    id: 'downloading',
+    label: 'Downloading',
+    filter: (i: GridItem) => i.flags.includes('downloading'),
+  },
+  {
+    id: 'tobuy',
+    label: 'To Buy',
+    filter: (i: GridItem) => i.flags.includes('tobuy'),
+  },
+  {
     id: 'newseasons',
     label: 'New Seasons',
     filter: (i: GridItem) => (i.metadata?.newSeasons.length ?? 0) > 0,

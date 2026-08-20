@@ -60,6 +60,7 @@ export interface GridItem {
   requestIds: number[];
   requestedSeasons: number[];
   firstRequestedAt: string | null;
+  flags: string[];
   metadata: GridMetadata | null;
 }
 
@@ -88,6 +89,12 @@ interface MediaGridPageProps {
 const PAGE_STEP = 60;
 /** poster grid density steps: minimum card width in px */
 const DENSITIES = [110, 146, 184];
+/** statuses where a 'downloading' mark makes sense (still being acquired) */
+const TOGET_LIKE = [
+  MediaStatus.PENDING,
+  MediaStatus.PROCESSING,
+  MediaStatus.PARTIALLY_AVAILABLE,
+];
 
 const STATUS_LABELS: Record<number, { label: string; className: string }> = {
   [MediaStatus.UNKNOWN]: { label: 'Unknown', className: 'bg-gray-600' },
@@ -241,6 +248,13 @@ const MediaGridPage = ({
   const ackNewSeasons = async (item: GridItem) => {
     await axios.post(
       `/api/v1/grid/ack-new-seasons/${item.mediaType}/${item.tmdbId}`
+    );
+    mutate();
+  };
+
+  const toggleFlag = async (item: GridItem, flag: 'downloading' | 'tobuy') => {
+    await axios.post(
+      `/api/v1/grid/flag/${item.mediaType}/${item.tmdbId}/${flag}`
     );
     mutate();
   };
@@ -411,7 +425,10 @@ const MediaGridPage = ({
           }}
         >
           {shown.map((item) => (
-            <li key={`${item.mediaType}-${item.tmdbId}`} className="relative">
+            <li
+              key={`${item.mediaType}-${item.tmdbId}`}
+              className="group relative"
+            >
               <TitleCard
                 id={item.tmdbId}
                 image={item.metadata?.posterPath || undefined}
@@ -426,6 +443,50 @@ const MediaGridPage = ({
               <div className="absolute bottom-10 left-1/2 z-30 -translate-x-1/2">
                 {newSeasonBadge(item)}
               </div>
+              {!selectMode && (
+                <div className="pointer-events-none absolute inset-x-1 bottom-16 z-30 flex justify-between px-1">
+                  <button
+                    type="button"
+                    title={
+                      item.flags.includes('tobuy')
+                        ? 'Marked to buy — click to clear'
+                        : 'Mark to buy'
+                    }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleFlag(item, 'tobuy');
+                    }}
+                    className={`pointer-events-auto rounded-md px-1.5 py-0.5 text-xs font-bold shadow transition ${
+                      item.flags.includes('tobuy')
+                        ? 'bg-amber-500 text-black opacity-100'
+                        : 'bg-black bg-opacity-60 text-white opacity-0 hover:bg-opacity-90 group-hover:opacity-100'
+                    }`}
+                  >
+                    🛒
+                  </button>
+                  {TOGET_LIKE.includes(item.status) && (
+                    <button
+                      type="button"
+                      title={
+                        item.flags.includes('downloading')
+                          ? 'Marked as downloading — click to clear'
+                          : 'Mark as downloading'
+                      }
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleFlag(item, 'downloading');
+                      }}
+                      className={`pointer-events-auto rounded-md px-1.5 py-0.5 text-xs font-bold shadow transition ${
+                        item.flags.includes('downloading')
+                          ? 'bg-indigo-500 text-white opacity-100'
+                          : 'bg-black bg-opacity-60 text-white opacity-0 hover:bg-opacity-90 group-hover:opacity-100'
+                      }`}
+                    >
+                      ⬇
+                    </button>
+                  )}
+                </div>
+              )}
               {selectMode && (
                 <button
                   type="button"
@@ -498,6 +559,16 @@ const MediaGridPage = ({
                       : ''}
                   </div>
                 </div>
+                {item.flags.includes('downloading') && (
+                  <span className="flex-none rounded bg-indigo-500 px-2 py-0.5 text-xs font-bold text-white">
+                    ⬇ Downloading
+                  </span>
+                )}
+                {item.flags.includes('tobuy') && (
+                  <span className="flex-none rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-black">
+                    🛒 To Buy
+                  </span>
+                )}
                 {newSeasonBadge(item, 'flex-none')}
                 <span
                   className={`flex-none rounded px-2 py-0.5 text-xs font-bold text-white ${status.className}`}
