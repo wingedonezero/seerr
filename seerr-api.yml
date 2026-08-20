@@ -7317,6 +7317,36 @@ paths:
       responses:
         '200':
           description: Flag cleared
+  /grid/order/{mediaType}/{tmdbId}:
+    post:
+      summary: Set or clear the per-series episode-order override
+      tags:
+        - grid
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order:
+                  type: string
+                  enum: ['', aired, dvd, absolute]
+      responses:
+        '200':
+          description: Stored override
   /grid/flag/{mediaType}/{tmdbId}/{flag}:
     post:
       summary: Toggle a user flag (downloading / tobuy) on a title

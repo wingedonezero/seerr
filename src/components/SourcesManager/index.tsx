@@ -49,9 +49,10 @@ const SourcesManager = ({
   displayTitle,
   onClose,
 }: SourcesManagerProps) => {
-  const { data, mutate } = useSWR<{ sources: SourceData[] }>(
-    `/api/v1/sources/${mediaType}/${tmdbId}`
-  );
+  const { data, mutate } = useSWR<{
+    sources: SourceData[];
+    order: { detected: string; override: string; effective: string };
+  }>(`/api/v1/sources/${mediaType}/${tmdbId}`);
   const [busy, setBusy] = useState(false);
   const [savedTick, setSavedTick] = useState<number | null>(null);
 
@@ -108,10 +109,41 @@ const SourcesManager = ({
         <h2 className="mb-1 text-xl font-bold text-white">
           Sources &amp; logs
         </h2>
-        <p className="mb-4 text-sm text-gray-400">
+        <p className="mb-2 text-sm text-gray-400">
           {displayTitle}
           {scopeLabel}
         </p>
+        {mediaType === 'tv' && data?.order && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-gray-400">
+            <span>
+              Episode order:{' '}
+              <span className="font-semibold text-gray-200">
+                {data.order.effective}
+              </span>
+              {data.order.override
+                ? ' (manual)'
+                : data.order.detected
+                  ? ' (detected)'
+                  : ''}
+            </span>
+            <select
+              className="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-xs text-white"
+              value={data.order.override}
+              onChange={(e) =>
+                call(() =>
+                  axios.post(`/api/v1/grid/order/${mediaType}/${tmdbId}`, {
+                    order: e.target.value,
+                  })
+                )
+              }
+            >
+              <option value="">Auto-detect</option>
+              <option value="aired">Aired</option>
+              <option value="dvd">DVD</option>
+              <option value="absolute">Absolute</option>
+            </select>
+          </div>
+        )}
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Button buttonType="ghost" onClick={() => addSource('disc')}>

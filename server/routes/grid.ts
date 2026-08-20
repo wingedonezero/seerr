@@ -82,6 +82,8 @@ gridRoutes.get('/', async (req, res, next) => {
               runtime: meta.runtime,
               certification: meta.certification,
               network: meta.network,
+              detectedOrder: meta.detectedOrder,
+              orderOverride: meta.orderOverride,
               seasons: JSON.parse(meta.seasons || '[]'),
               newSeasons: JSON.parse(meta.newSeasons || '[]'),
               newSeasonsDetectedAt: meta.newSeasonsDetectedAt,
@@ -136,6 +138,25 @@ gridRoutes.post('/ack-new-seasons/:mediaType/:tmdbId', async (req, res, next) =>
       Number(req.params.tmdbId)
     );
     return res.status(200).json({ ok: true });
+  } catch (e) {
+    return next({ status: 500, message: e.message });
+  }
+});
+
+/** Set/clear the per-series episode-order override ('' = auto-detect). */
+gridRoutes.post('/order/:mediaType/:tmdbId', async (req, res, next) => {
+  const mediaType = req.params.mediaType === 'tv' ? 'tv' : 'movie';
+  const tmdbId = Number(req.params.tmdbId);
+  const order = String(req.body?.order ?? '');
+  if (!['', 'aired', 'dvd', 'absolute'].includes(order) || isNaN(tmdbId)) {
+    return next({ status: 400, message: 'order must be aired, dvd, absolute or empty.' });
+  }
+  try {
+    await getRepository(MediaMetadata).update(
+      { tmdbId, mediaType },
+      { orderOverride: order }
+    );
+    return res.status(200).json({ order });
   } catch (e) {
     return next({ status: 500, message: e.message });
   }

@@ -22,6 +22,8 @@ import type {
 } from '@server/lib/scanners/baseScanner';
 import BaseScanner from '@server/lib/scanners/baseScanner';
 import type { Library } from '@server/lib/settings';
+import type { JellyfinEpisodeTuple } from '@server/lib/orderdetection';
+import { assessOrder } from '@server/lib/orderdetection';
 import { getSettings } from '@server/lib/settings';
 import { getHostname } from '@server/utils/getHostname';
 import { uniqWith } from 'lodash';
@@ -284,6 +286,7 @@ class JellyfinScanner
         const jellyfinSeasons = await this.jfClient.getSeasons(Id);
 
         const processableSeasons: ProcessableSeason[] = [];
+        const jellyfinTuples: JellyfinEpisodeTuple[] = [];
 
         const settings = getSettings();
         const filteredSeasons = settings.main.enableSpecialEpisodes
@@ -332,6 +335,16 @@ class JellyfinScanner
                 }
 
                 totalStandard += episodeCount;
+
+                if (episode.IndexNumber != null) {
+                  jellyfinTuples.push({
+                    seasonNumber: Number(
+                      matchedJellyfinSeason.IndexNumber ?? season.season_number
+                    ),
+                    episodeNumber: Number(episode.IndexNumber),
+                    name: episode.Name ?? '',
+                  });
+                }
               }
 
               if (settings.main.enableEpisodeAvailability) {
@@ -385,6 +398,16 @@ class JellyfinScanner
                 if (hasStandard) totalStandard += episodeCount;
                 if (has4k) total4k += episodeCount;
 
+                if (episode.IndexNumber != null) {
+                  jellyfinTuples.push({
+                    seasonNumber: Number(
+                      matchedJellyfinSeason.IndexNumber ?? season.season_number
+                    ),
+                    episodeNumber: Number(episode.IndexNumber),
+                    name: episode.Name ?? '',
+                  });
+                }
+
                 if (
                   settings.main.enableEpisodeAvailability &&
                   (hasStandard || has4k)
@@ -431,6 +454,29 @@ class JellyfinScanner
               episodes4k: 0,
             });
           }
+        }
+
+        // Order-awareness: if this library uses DVD/absolute numbering (per
+        // tuple/title scoring against stored orderings, or a manual
+        // override), compare season completeness in THAT ordering — a
+        // 19-episode DVD season stops reading as 19-of-20-aired.
+        try {
+          const assessment = await assessOrder('tv', tvShow.id, jellyfinTuples);
+          if (
+            assessment &&
+            assessment.effective !== 'aired' &&
+            assessment.expectedBySeason.size > 0
+          ) {
+            for (const ps of processableSeasons) {
+              ps.totalEpisodes =
+                assessment.expectedBySeason.get(ps.seasonNumber) ?? 0;
+            }
+          }
+        } catch (e) {
+          this.log(
+            `Order assessment failed for ${tvShow.name}: ${e.message}`,
+            'debug'
+          );
         }
 
         await this.processShow(

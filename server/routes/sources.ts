@@ -21,16 +21,26 @@ const parseTitleParams = (params: Record<string, string>) => ({
   tmdbId: Number(params.tmdbId),
 });
 
-/** All sources (with logs) for a title, ordered by season then creation. */
+/** All sources (with logs) for a title, plus its episode-order state. */
 sourcesRoutes.get('/:mediaType/:tmdbId', async (req, res, next) => {
   const { mediaType, tmdbId } = parseTitleParams(req.params);
   try {
-    const sources = await getRepository(MediaSource).find({
-      where: { tmdbId, mediaType },
-      relations: { logs: true },
-      order: { seasonNumber: 'ASC', id: 'ASC' },
+    const [sources, meta] = await Promise.all([
+      getRepository(MediaSource).find({
+        where: { tmdbId, mediaType },
+        relations: { logs: true },
+        order: { seasonNumber: 'ASC', id: 'ASC' },
+      }),
+      getRepository(MediaMetadata).findOne({ where: { tmdbId, mediaType } }),
+    ]);
+    return res.status(200).json({
+      sources,
+      order: {
+        detected: meta?.detectedOrder ?? '',
+        override: meta?.orderOverride ?? '',
+        effective: meta?.orderOverride || meta?.detectedOrder || 'aired',
+      },
     });
-    return res.status(200).json({ sources });
   } catch (e) {
     return next({ status: 500, message: e.message });
   }

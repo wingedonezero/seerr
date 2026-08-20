@@ -84,6 +84,14 @@ class MediaMetadata {
   @Column({ type: 'varchar', default: '' })
   public network: string;
 
+  /** ordering the library was detected to use: '' unknown | aired | dvd | absolute */
+  @Column({ type: 'varchar', default: '' })
+  public detectedOrder: string;
+
+  /** manual per-series override; wins over detection when set */
+  @Column({ type: 'varchar', default: '' })
+  public orderOverride: string;
+
   /** JSON: [{ seasonNumber, episodeCount, airDate }] — includes season 0 */
   @Column({ type: 'text', default: '[]' })
   public seasons: string;

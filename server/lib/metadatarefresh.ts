@@ -1,5 +1,6 @@
 import { getMetadataProvider } from '@server/api/metadata';
 import TheMovieDb from '@server/api/themoviedb';
+import Tvdb from '@server/api/tvdb';
 import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
 import type { TmdbKeyword } from '@server/api/themoviedb/interfaces';
 import { MediaType } from '@server/constants/media';
@@ -204,6 +205,7 @@ class MetadataRefresh {
     }
     const ongoing = ONGOING_STATUSES.includes(row.seriesStatus);
     const newestSeason = Math.max(0, ...seasons.map((s) => s.seasonNumber));
+    let episodesChanged = false;
 
     for (const season of seasons) {
       const have = storedPerSeason.get(season.seasonNumber) ?? 0;
@@ -211,6 +213,7 @@ class MetadataRefresh {
       if (have === season.episodeCount && !isLiveSeason) {
         continue;
       }
+      episodesChanged = true;
       try {
         const data = await provider.getTvSeason({
           tvId: row.tmdbId,
@@ -243,6 +246,53 @@ class MetadataRefresh {
         );
       }
       await sleep(PACE_MS);
+    }
+
+    // Alternate orderings (DVD/absolute) come from TVDB season types and are
+    // matched onto the aired-keyed rows by TVDB episode id. Refetched only
+    // when the episode set itself changed.
+    if (episodesChanged && row.tvdbId && provider instanceof Tvdb) {
+      await this.syncAlternateOrders(row, provider);
+    }
+  }
+
+  private async syncAlternateOrders(
+    row: MediaMetadata,
+    tvdb: Tvdb
+  ): Promise<void> {
+    const episodeRepository = getRepository(MetadataEpisode);
+    try {
+      const [dvd, absolute] = [
+        await tvdb.getEpisodesBySeasonType(row.tvdbId as number, 'dvd'),
+        await tvdb.getEpisodesBySeasonType(row.tvdbId as number, 'absolute'),
+      ];
+      await episodeRepository.manager.transaction(async (em) => {
+        for (const ep of dvd) {
+          await em.update(
+            MetadataEpisode,
+            { metadata: { id: row.id }, providerEpisodeId: ep.id },
+            { dvdSeasonNumber: ep.seasonNumber, dvdEpisodeNumber: ep.number }
+          );
+        }
+        for (const ep of absolute) {
+          await em.update(
+            MetadataEpisode,
+            { metadata: { id: row.id }, providerEpisodeId: ep.id },
+            { absoluteNumber: ep.number }
+          );
+        }
+      });
+      if (dvd.length || absolute.length) {
+        logger.debug(
+          `Alternate orderings stored for tvdb:${row.tvdbId} (dvd: ${dvd.length}, absolute: ${absolute.length})`,
+          { label: 'Metadata Refresh' }
+        );
+      }
+    } catch (e) {
+      logger.warn(
+        `Alternate-order sync failed for tvdb:${row.tvdbId}: ${e.message}`,
+        { label: 'Metadata Refresh' }
+      );
     }
   }
 

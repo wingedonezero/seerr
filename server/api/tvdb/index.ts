@@ -195,6 +195,50 @@ class Tvdb extends ExternalAPI implements TvShowProvider {
     }
   }
 
+  /**
+   * Episode list in an alternate TVDB ordering ("season type"): each entry's
+   * seasonNumber/number reflect that ordering. Used to map DVD/absolute
+   * numbering onto aired-keyed episode rows by matching TVDB episode ids.
+   * Returns [] when the series has no such ordering.
+   */
+  public async getEpisodesBySeasonType(
+    tvdbId: number,
+    seasonType: 'dvd' | 'absolute'
+  ): Promise<TvdbEpisode[]> {
+    try {
+      await this.refreshToken();
+      const all: TvdbEpisode[] = [];
+      let page = 0;
+      while (page < 50) {
+        const resp = await this.get<TvdbBaseResponse<TvdbSeasonDetails>>(
+          `/series/${tvdbId}/episodes/${seasonType}/${Tvdb.DEFAULT_LANGUAGE}`,
+          {
+            headers: {
+              Authorization: `Bearer ${this.token}`,
+            },
+            params: { page },
+          }
+        );
+        const episodes = resp?.data?.episodes;
+        if (!episodes || episodes.length === 0) {
+          break;
+        }
+        all.push(...episodes);
+        if (!(resp.links?.next && episodes.length > 0)) {
+          break;
+        }
+        page++;
+      }
+      return all;
+    } catch (e) {
+      logger.warn(
+        `Failed to fetch ${seasonType} ordering for tvdb:${tvdbId}: ${e.message}`,
+        { label: 'TVDB' }
+      );
+      return [];
+    }
+  }
+
   public async getTvSeason({
     tvId,
     seasonNumber,
