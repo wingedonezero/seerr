@@ -881,7 +881,35 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
             )}
           </div>
           <div className="flex w-full flex-col space-y-2">
-            {data.seasons
+            {(orderActive
+              ? // Ordered view: season rows follow the library's ordering —
+                // absolute shows get ONE big season instead of ghost aired
+                // rows duplicating the same episodes. Aired-only seasons the
+                // ordering doesn't know (typically Specials) keep their rows.
+                [
+                  ...orderedData.seasons.map(
+                    (o) =>
+                      data.seasons.find(
+                        (a) => a.seasonNumber === o.seasonNumber
+                      ) ?? {
+                        id: -o.seasonNumber,
+                        seasonNumber: o.seasonNumber,
+                        episodeCount: o.episodeCount,
+                        airDate: null,
+                        name: '',
+                        overview: '',
+                        posterPath: '',
+                      }
+                  ),
+                  ...data.seasons.filter(
+                    (a) =>
+                      !orderedData.seasons.some(
+                        (o) => o.seasonNumber === a.seasonNumber
+                      )
+                  ),
+                ].sort((a, b) => a.seasonNumber - b.seasonNumber)
+              : data.seasons
+            )
               .slice()
               .reverse()
               .filter(
