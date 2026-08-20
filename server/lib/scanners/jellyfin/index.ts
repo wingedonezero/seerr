@@ -314,9 +314,9 @@ class JellyfinScanner
             let episodeDetails: ProcessableEpisode[] | undefined;
 
             if (!this.enable4kShow) {
-              const episodes = await this.jfClient.getEpisodes(
-                Id,
-                matchedJellyfinSeason.Id
+              const episodes = this.withoutCrossListedEpisodes(
+                await this.jfClient.getEpisodes(Id, matchedJellyfinSeason.Id),
+                matchedJellyfinSeason
               );
 
               for (const episode of episodes) {
@@ -339,10 +339,11 @@ class JellyfinScanner
               }
             } else {
               // 4K detection enabled - request media info to check resolution
-              const episodes = await this.jfClient.getEpisodes(
-                Id,
-                matchedJellyfinSeason.Id,
-                { includeMediaInfo: true }
+              const episodes = this.withoutCrossListedEpisodes(
+                await this.jfClient.getEpisodes(Id, matchedJellyfinSeason.Id, {
+                  includeMediaInfo: true,
+                }),
+                matchedJellyfinSeason
               );
 
               for (const episode of episodes) {
@@ -462,6 +463,27 @@ class JellyfinScanner
         { errorMessage: e.message, jellyfinitem }
       );
     }
+  }
+
+  /**
+   * Jellyfin's per-season episode listing can include specials the metadata
+   * provider cross-lists into the season ("airs before/after" data) when the
+   * user has "Display specials within seasons" enabled. Those items belong to
+   * season 0: they inflate the episode count (breaking the strict
+   * totalEpisodes === episodes availability check in BaseScanner) and collide
+   * with real episode numbers in per-episode tracking. Keep only episodes
+   * whose ParentIndexNumber matches the Jellyfin season being scanned.
+   */
+  private withoutCrossListedEpisodes(
+    episodes: JellyfinLibraryItem[],
+    season: JellyfinLibraryItem
+  ): JellyfinLibraryItem[] {
+    return episodes.filter(
+      (episode) =>
+        episode.ParentIndexNumber == null ||
+        season.IndexNumber == null ||
+        Number(episode.ParentIndexNumber) === Number(season.IndexNumber)
+    );
   }
 
   private toProcessableEpisodes(
