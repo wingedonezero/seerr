@@ -29,3 +29,4 @@ support), and upstream is only merged selectively.
 |------|--------|-------------|-----|
 | 2026-08-20 | Replaced upstream CI with single ghcr build workflow; removed 18 upstream workflows | `.github/workflows/` | Personal fork: no releases, docs, helm, cypress infra |
 | 2026-08-20 | Added this manifest | `FORK.md` | Track what we changed and why |
+| 2026-08-20 | Merged upstream WIP branch `feat-episode-availability-media-scanners` (56 commits, per-episode availability: Episode entity + migration, scanner wiring, availabilitySync, flag `enableEpisodeAvailability` default off) | `server/entity/Episode.ts`, `server/lib/scanners/*`, `server/lib/availabilitySync.ts`, `server/migration/*/AddEpisodeTable*` | Upstream hadn't released it; we wanted it now rather than waiting. Watch upstream for their final version when syncing later |
