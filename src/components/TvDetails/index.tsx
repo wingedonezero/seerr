@@ -61,6 +61,7 @@ import type { Crew } from '@server/models/common';
 import axios from 'axios';
 import { countries } from 'country-flag-icons';
 import 'country-flag-icons/3x2/flags.css';
+import SourcesManager from '@app/components/SourcesManager';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
@@ -121,6 +122,15 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
   const [showManager, setShowManager] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [sourcesSeason, setSourcesSeason] = useState<number | null>(null);
+  const [showSources, setShowSources] = useState(false);
+  const { data: sourcesData, mutate: revalidateSources } = useSWR<{
+    sources: { id: number; seasonNumber: number | null }[];
+  }>(`/api/v1/sources/tv/${router.query.tvId}`);
+  const sourceCountFor = (seasonNumber: number) =>
+    (sourcesData?.sources ?? []).filter(
+      (s) => s.seasonNumber === seasonNumber
+    ).length;
   const [toggleWatchlist, setToggleWatchlist] = useState<boolean>(
     !tv?.onUserWatchlist
   );
@@ -616,6 +626,18 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                 ))}
           </span>
         </div>
+        {showSources && (
+          <SourcesManager
+            mediaType="tv"
+            tmdbId={data.id}
+            seasonNumber={sourcesSeason}
+            displayTitle={data.name}
+            onClose={() => {
+              setShowSources(false);
+              revalidateSources();
+            }}
+          />
+        )}
         <div className="media-actions">
           {showHideButton &&
             data?.mediaInfo?.status !== MediaStatus.PROCESSING &&
@@ -881,6 +903,28 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                                 episodeCount: season.episodeCount,
                               })}
                             </Badge>
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              title="Sources & logs — discs, rips, releases"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setSourcesSeason(season.seasonNumber);
+                                setShowSources(true);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSourcesSeason(season.seasonNumber);
+                                  setShowSources(true);
+                                }
+                              }}
+                              className="rounded-md bg-gray-700 px-2 py-0.5 text-xs font-semibold text-gray-200 hover:bg-gray-600"
+                            >
+                              💿 {sourceCountFor(season.seasonNumber) || '+'}
+                            </span>
                           </div>
                           {((!mSeason &&
                             request?.status === MediaRequestStatus.APPROVED) ||

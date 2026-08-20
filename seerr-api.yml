@@ -7373,6 +7373,202 @@ paths:
       responses:
         '200':
           description: Deleted count
+  /sources/export:
+    get:
+      summary: Export all source records as a zip of txt files
+      tags:
+        - sources
+      responses:
+        '200':
+          description: Zip archive
+  /sources/export/{mediaType}/{tmdbId}:
+    get:
+      summary: Export one title's sources/logs as a zip of txt files
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Zip archive
+  /sources/{mediaType}/{tmdbId}:
+    get:
+      summary: List a title's sources with logs
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Sources
+    post:
+      summary: Create a source (disc/remux/encode) for a title
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - kind
+              properties:
+                kind:
+                  type: string
+                  enum: [disc, remux, encode]
+                name:
+                  type: string
+                grp:
+                  type: string
+                info:
+                  type: string
+                seasonNumber:
+                  type: number
+                  nullable: true
+      responses:
+        '201':
+          description: Created source
+  /sources/source/{id}:
+    put:
+      summary: Update a source
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                name:
+                  type: string
+                grp:
+                  type: string
+                info:
+                  type: string
+                seasonNumber:
+                  type: number
+                  nullable: true
+      responses:
+        '200':
+          description: Updated source
+    delete:
+      summary: Delete a source and its logs
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Deleted
+  /sources/source/{id}/logs:
+    post:
+      summary: Add a log to a source
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                body:
+                  type: string
+      responses:
+        '201':
+          description: Created log
+  /sources/logs/{logId}:
+    put:
+      summary: Update a log
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: logId
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Updated log
+    delete:
+      summary: Delete a log
+      tags:
+        - sources
+      parameters:
+        - in: path
+          name: logId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Deleted
   /media:
     get:
       summary: Get media

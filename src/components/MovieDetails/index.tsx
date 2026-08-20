@@ -57,6 +57,7 @@ import axios from 'axios';
 import { countries } from 'country-flag-icons';
 import 'country-flag-icons/3x2/flags.css';
 import { uniqBy } from 'lodash';
+import SourcesManager from '@app/components/SourcesManager';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
@@ -123,6 +124,10 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
   const [showMoreStudios, setShowMoreStudios] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [showSources, setShowSources] = useState(false);
+  const { data: sourcesData, mutate: revalidateSources } = useSWR<{
+    sources: { id: number }[];
+  }>(`/api/v1/sources/movie/${router.query.movieId}`);
   const [toggleWatchlist, setToggleWatchlist] = useState<boolean>(
     !movie?.onUserWatchlist
   );
@@ -565,7 +570,28 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
                 ))}
           </span>
         </div>
+        {showSources && (
+          <SourcesManager
+            mediaType="movie"
+            tmdbId={data.id}
+            seasonNumber={null}
+            displayTitle={data.title}
+            onClose={() => {
+              setShowSources(false);
+              revalidateSources();
+            }}
+          />
+        )}
         <div className="media-actions">
+          <Button
+            buttonType="ghost"
+            className="z-40 mr-2"
+            buttonSize="md"
+            onClick={() => setShowSources(true)}
+            title="Sources & logs — discs, rips, releases"
+          >
+            <span>💿 {(sourcesData?.sources ?? []).length || '+'}</span>
+          </Button>
           {showHideButton &&
             data?.mediaInfo?.status !== MediaStatus.PROCESSING &&
             data?.mediaInfo?.status !== MediaStatus.AVAILABLE &&

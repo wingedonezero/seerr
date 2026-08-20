@@ -39,6 +39,7 @@ import movieRoutes from './movie';
 import personRoutes from './person';
 import gridRoutes from './grid';
 import requestRoutes from './request';
+import sourcesRoutes from './sources';
 import searchRoutes from './search';
 import serviceRoutes from './service';
 import tvRoutes from './tv';
@@ -159,6 +160,7 @@ router.use('/search', isAuthenticated(), searchRoutes);
 router.use('/discover', isAuthenticated(), discoverRoutes);
 router.use('/request', isAuthenticated(), requestRoutes);
 router.use('/grid', isAuthenticated(), gridRoutes);
+router.use('/sources', isAuthenticated(), sourcesRoutes);
 router.use('/watchlist', isAuthenticated(), watchlistRoutes);
 router.use('/blocklist', isAuthenticated(), blocklistRoutes);
 router.use(
