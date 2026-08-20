@@ -474,10 +474,10 @@ class JellyfinScanner
    * with real episode numbers in per-episode tracking. Keep only episodes
    * whose ParentIndexNumber matches the Jellyfin season being scanned.
    */
-  private withoutCrossListedEpisodes(
-    episodes: JellyfinLibraryItem[],
+  private withoutCrossListedEpisodes<T extends JellyfinLibraryItem>(
+    episodes: T[],
     season: JellyfinLibraryItem
-  ): JellyfinLibraryItem[] {
+  ): T[] {
     return episodes.filter(
       (episode) =>
         episode.ParentIndexNumber == null ||
