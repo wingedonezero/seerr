@@ -62,6 +62,8 @@ import axios from 'axios';
 import { countries } from 'country-flag-icons';
 import 'country-flag-icons/3x2/flags.css';
 import SourcesManager from '@app/components/SourcesManager';
+import type { OrderedEpisode } from '@app/components/TvDetails/OrderedSeason';
+import OrderedSeason from '@app/components/TvDetails/OrderedSeason';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
@@ -131,6 +133,26 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
     (sourcesData?.sources ?? []).filter(
       (s) => s.seasonNumber === seasonNumber
     ).length;
+  const { data: orderedData, mutate: revalidateOrdered } = useSWR<{
+    effective: 'aired' | 'dvd' | 'absolute';
+    detected: string;
+    override: string;
+    seasons: {
+      seasonNumber: number;
+      episodeCount: number;
+      episodes: OrderedEpisode[];
+    }[];
+  }>(`/api/v1/grid/episodes/tv/${router.query.tvId}`);
+  const orderActive =
+    orderedData &&
+    orderedData.effective !== 'aired' &&
+    orderedData.seasons.length > 0;
+  const orderedSeason = (seasonNumber: number) =>
+    orderedData?.seasons.find((s) => s.seasonNumber === seasonNumber);
+  const setOrderOverride = async (order: string) => {
+    await axios.post(`/api/v1/grid/order/tv/${router.query.tvId}`, { order });
+    revalidateOrdered();
+  };
   const [toggleWatchlist, setToggleWatchlist] = useState<boolean>(
     !tv?.onUserWatchlist
   );
@@ -817,7 +839,45 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
               ))}
             </div>
           )}
-          <h2 className="py-4">{intl.formatMessage(messages.seasonstitle)}</h2>
+          <div className="flex items-center gap-3 py-4">
+            <h2>{intl.formatMessage(messages.seasonstitle)}</h2>
+            {orderedData && (
+              <>
+                <span
+                  className={`rounded-md px-2 py-0.5 text-xs font-bold uppercase ${
+                    orderedData.effective === 'aired'
+                      ? 'bg-gray-700 text-gray-300'
+                      : 'bg-amber-500 text-black'
+                  }`}
+                  title={
+                    orderedData.override
+                      ? 'Episode order set manually'
+                      : orderedData.detected
+                        ? 'Episode order detected from your library'
+                        : 'Default aired order'
+                  }
+                >
+                  {orderedData.effective} order
+                  {orderedData.override
+                    ? ' · manual'
+                    : orderedData.detected
+                      ? ' · detected'
+                      : ''}
+                </span>
+                <select
+                  className="rounded-md border border-gray-600 bg-gray-800 px-2 py-1 text-xs text-white"
+                  value={orderedData.override}
+                  onChange={(e) => setOrderOverride(e.target.value)}
+                  title="Override episode ordering (availability rescores on the next library scan)"
+                >
+                  <option value="">Auto-detect</option>
+                  <option value="aired">Aired</option>
+                  <option value="dvd">DVD</option>
+                  <option value="absolute">Absolute</option>
+                </select>
+              </>
+            )}
+          </div>
           <div className="flex w-full flex-col space-y-2">
             {data.seasons
               .slice()
@@ -900,7 +960,10 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                             </span>
                             <Badge badgeType="dark">
                               {intl.formatMessage(messages.episodeCount, {
-                                episodeCount: season.episodeCount,
+                                episodeCount: orderActive
+                                  ? (orderedSeason(season.seasonNumber)
+                                      ?.episodeCount ?? season.episodeCount)
+                                  : season.episodeCount,
                               })}
                             </Badge>
                             <span
@@ -1132,10 +1195,20 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                           style={{ margin: '0px' }}
                         >
                           <Disclosure.Panel className="w-full rounded-b-md border-b border-l border-r border-gray-700 px-4 pb-2">
-                            <Season
-                              tvId={data.id}
-                              seasonNumber={season.seasonNumber}
-                            />
+                            {orderActive &&
+                            orderedSeason(season.seasonNumber) ? (
+                              <OrderedSeason
+                                episodes={
+                                  orderedSeason(season.seasonNumber)
+                                    ?.episodes ?? []
+                                }
+                              />
+                            ) : (
+                              <Season
+                                tvId={data.id}
+                                seasonNumber={season.seasonNumber}
+                              />
+                            )}
                           </Disclosure.Panel>
                         </Transition>
                       </>

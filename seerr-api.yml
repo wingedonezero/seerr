@@ -7317,6 +7317,26 @@ paths:
       responses:
         '200':
           description: Flag cleared
+  /grid/episodes/{mediaType}/{tmdbId}:
+    get:
+      summary: Episode list in the series' effective ordering (local data)
+      tags:
+        - grid
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Ordered episode list
   /grid/order/{mediaType}/{tmdbId}:
     post:
       summary: Set or clear the per-series episode-order override

@@ -1,8 +1,10 @@
-import { MediaType } from '@server/constants/media';
+import { MediaStatus, MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
+import Episode from '@server/entity/Episode';
 import Media from '@server/entity/Media';
 import MediaFlag from '@server/entity/MediaFlag';
 import MediaMetadata from '@server/entity/MediaMetadata';
+import MetadataEpisode from '@server/entity/MetadataEpisode';
 import { MediaRequest } from '@server/entity/MediaRequest';
 import metadataRefresh from '@server/lib/metadatarefresh';
 import { Permission } from '@server/lib/permissions';
@@ -138,6 +140,103 @@ gridRoutes.post('/ack-new-seasons/:mediaType/:tmdbId', async (req, res, next) =>
       Number(req.params.tmdbId)
     );
     return res.status(200).json({ ok: true });
+  } catch (e) {
+    return next({ status: 500, message: e.message });
+  }
+});
+
+/**
+ * Episode list in the series' EFFECTIVE ordering, from local data only.
+ * Availability is joined from the per-episode tracking rows, which are keyed
+ * by the library's own numbering — identical to the display numbering here.
+ */
+gridRoutes.get('/episodes/:mediaType/:tmdbId', async (req, res, next) => {
+  const mediaType = req.params.mediaType === 'tv' ? 'tv' : 'movie';
+  const tmdbId = Number(req.params.tmdbId);
+  try {
+    const meta = await getRepository(MediaMetadata).findOne({
+      where: { tmdbId, mediaType },
+    });
+    if (!meta) {
+      return res.status(200).json({ effective: 'aired', seasons: [] });
+    }
+    const effective = (meta.orderOverride || meta.detectedOrder || 'aired') as
+      | 'aired'
+      | 'dvd'
+      | 'absolute';
+    const episodes = await getRepository(MetadataEpisode).find({
+      where: { metadata: { id: meta.id } },
+    });
+
+    // availability map in library numbering: media -> seasons -> episode rows
+    const media = await getRepository(Media).findOne({
+      where: {
+        tmdbId,
+        mediaType: mediaType === 'tv' ? MediaType.TV : MediaType.MOVIE,
+      },
+      relations: { seasons: true },
+    });
+    const availableSet = new Set<string>();
+    if (media) {
+      for (const season of media.seasons ?? []) {
+        const rows = await getRepository(Episode).find({
+          where: { season: { id: season.id } },
+        });
+        for (const ep of rows) {
+          if (ep.status === MediaStatus.AVAILABLE) {
+            availableSet.add(`${season.seasonNumber}:${ep.episodeNumber}`);
+          }
+        }
+      }
+    }
+
+    type DisplayEp = {
+      episodeNumber: number;
+      title: string;
+      airDate: string | null;
+      overview: string;
+      available: boolean;
+    };
+    const bySeason = new Map<number, DisplayEp[]>();
+    for (const ep of episodes) {
+      let s: number | null = null;
+      let e: number | null = null;
+      if (effective === 'dvd') {
+        s = ep.dvdSeasonNumber ?? null;
+        e = ep.dvdEpisodeNumber ?? null;
+      } else if (effective === 'absolute') {
+        s = ep.absoluteNumber != null ? 1 : null;
+        e = ep.absoluteNumber ?? null;
+      } else {
+        s = ep.seasonNumber;
+        e = ep.episodeNumber;
+      }
+      if (s === null || e === null) {
+        continue;
+      }
+      const list = bySeason.get(s) ?? [];
+      list.push({
+        episodeNumber: e,
+        title: ep.title,
+        airDate: ep.airDate ?? null,
+        overview: ep.overview,
+        available: availableSet.has(`${s}:${e}`),
+      });
+      bySeason.set(s, list);
+    }
+    const seasons = [...bySeason.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([seasonNumber, list]) => ({
+        seasonNumber,
+        episodeCount: list.length,
+        episodes: list.sort((a, b) => a.episodeNumber - b.episodeNumber),
+      }));
+    return res.status(200).json({
+      effective,
+      detected: meta.detectedOrder,
+      override: meta.orderOverride,
+      seasons,
+    });
   } catch (e) {
     return next({ status: 500, message: e.message });
   }
