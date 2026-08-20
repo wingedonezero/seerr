@@ -58,6 +58,7 @@ import { countries } from 'country-flag-icons';
 import 'country-flag-icons/3x2/flags.css';
 import { uniqBy } from 'lodash';
 import SourcesManager from '@app/components/SourcesManager';
+import VersionsPanel from '@app/components/VersionsPanel';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
@@ -570,6 +571,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
                 ))}
           </span>
         </div>
+        <VersionsPanel mediaType="movie" tmdbId={data.id} />
         {showSources && (
           <SourcesManager
             mediaType="movie"

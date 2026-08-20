@@ -23,6 +23,7 @@ export interface SourceData {
   kind: string;
   name: string;
   grp: string;
+  versionLabel: string;
   info: string;
   logs: SourceLogData[];
 }
@@ -198,6 +199,7 @@ const SourceEditor = ({
 }) => {
   const [name, setName] = useState(source.name);
   const [grp, setGrp] = useState(source.grp);
+  const [versionLabel, setVersionLabel] = useState(source.versionLabel ?? '');
   const [info, setInfo] = useState(source.info);
   const [logEdits, setLogEdits] = useState<
     Record<number, { title: string; body: string }>
@@ -236,6 +238,14 @@ const SourceEditor = ({
             onChange={(e) => setGrp(e.target.value)}
           />
         )}
+        <input
+          type="text"
+          className="w-28 rounded-md border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-white"
+          placeholder="Version"
+          title="Which library version this belongs to (e.g. 1080p, 480p) — blank = main"
+          value={versionLabel}
+          onChange={(e) => setVersionLabel(e.target.value)}
+        />
         <Button
           buttonType="primary"
           disabled={busy}
@@ -246,6 +256,7 @@ const SourceEditor = ({
                   name,
                   grp,
                   info,
+                  versionLabel,
                 }),
               source.id
             )

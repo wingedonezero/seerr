@@ -25,6 +25,7 @@ import type { Library } from '@server/lib/settings';
 import type { JellyfinEpisodeTuple } from '@server/lib/orderdetection';
 import { assessOrder } from '@server/lib/orderdetection';
 import { getSettings } from '@server/lib/settings';
+import { recordVersion } from '@server/lib/versiontracker';
 import { getHostname } from '@server/utils/getHostname';
 import { uniqWith } from 'lodash';
 
@@ -149,6 +150,30 @@ class JellyfinScanner
       const mediaAddedAt = metadata.DateCreated
         ? new Date(metadata.DateCreated)
         : undefined;
+
+      // Version bookkeeping for deliberate duplicates ("… - Directors Cut"):
+      // record every entry; only the main copy drives media status.
+      let drivesStatus = true;
+      try {
+        drivesStatus = await recordVersion({
+          tmdbId,
+          mediaType: 'movie',
+          jellyfinItemId: metadata.Id,
+          entryTitle: metadata.Name ?? '',
+          canonicalTitle: metadata.OriginalTitle ?? metadata.Name ?? '',
+          year: metadata.ProductionYear ?? null,
+          coverage: [],
+        });
+      } catch (e) {
+        this.log(`Version tracking failed: ${e.message}`, 'debug');
+      }
+      if (!drivesStatus) {
+        this.log(
+          `Skipping status update for non-main version "${metadata.Name}"`,
+          'debug'
+        );
+        return;
+      }
 
       if (hasOtherResolution || (!this.enable4kMovie && has4k)) {
         await this.processMovie(tmdbId, {
@@ -507,6 +532,35 @@ class JellyfinScanner
             `Order assessment failed for ${tvShow.name}: ${e.message}`,
             'debug'
           );
+        }
+
+        // Version bookkeeping (deliberate duplicates like "… - 1080p"):
+        // record this entry's aired-currency coverage; only the MAIN version
+        // (bare title) drives media status when several entries exist.
+        let drivesStatus = true;
+        try {
+          drivesStatus = await recordVersion({
+            tmdbId: tvShow.id,
+            mediaType: 'tv',
+            jellyfinItemId: Id,
+            entryTitle: jellyfinitem.SeriesName ?? jellyfinitem.Name ?? '',
+            canonicalTitle: tvShow.name ?? '',
+            year: parseInt((tvShow.first_air_date ?? '').slice(0, 4), 10) || null,
+            coverage: processableSeasons.map((ps) => ({
+              seasonNumber: ps.seasonNumber,
+              covered: ps.episodes,
+              total: ps.totalEpisodes,
+            })),
+          });
+        } catch (e) {
+          this.log(`Version tracking failed: ${e.message}`, 'debug');
+        }
+        if (!drivesStatus) {
+          this.log(
+            `Skipping status update for non-main version "${jellyfinitem.Name}"`,
+            'debug'
+          );
+          return;
         }
 
         await this.processShow(

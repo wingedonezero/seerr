@@ -110,6 +110,7 @@ export interface JellyfinMediaSource {
   Protocol: string;
   Id: string;
   Path: string;
+  Size?: number;
   Type: string;
   VideoType: string;
   MediaStreams: JellyfinMediaStream[];
@@ -124,6 +125,8 @@ export interface JellyfinLibraryItemExtended extends JellyfinLibraryItem {
     AniDB?: string;
   };
   MediaSources?: JellyfinMediaSource[];
+  OriginalTitle?: string;
+  ProductionYear?: number;
   Width?: number;
   Height?: number;
   IsHD?: boolean;

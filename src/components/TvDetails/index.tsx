@@ -62,6 +62,7 @@ import axios from 'axios';
 import { countries } from 'country-flag-icons';
 import 'country-flag-icons/3x2/flags.css';
 import SourcesManager from '@app/components/SourcesManager';
+import VersionsPanel from '@app/components/VersionsPanel';
 import type { OrderedEpisode } from '@app/components/TvDetails/OrderedSeason';
 import OrderedSeason from '@app/components/TvDetails/OrderedSeason';
 import Link from 'next/link';
@@ -839,6 +840,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
               ))}
             </div>
           )}
+          <VersionsPanel mediaType="tv" tmdbId={data.id} />
           <div className="flex items-center gap-3 py-4">
             <h2>{intl.formatMessage(messages.seasonstitle)}</h2>
             {orderedData && (

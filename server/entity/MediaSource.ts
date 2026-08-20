@@ -46,6 +46,15 @@ class MediaSource {
   @Column({ type: 'varchar', default: '' })
   public grp: string;
 
+  /**
+   * which library version this source belongs to, by LABEL TEXT (e.g.
+   * '1080p', '480p', '' = main) — deliberately not a foreign key: version
+   * rows are scan-owned and rebuildable, and nothing may cascade into
+   * user-authored data.
+   */
+  @Column({ type: 'varchar', default: '' })
+  public versionLabel: string;
+
   /** free text: disc label/size/protection, BDInfo dump, release notes… */
   @Column({ type: 'text', default: '' })
   public info: string;

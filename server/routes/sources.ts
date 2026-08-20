@@ -51,7 +51,8 @@ sourcesRoutes.post(
   isAuthenticated(Permission.MANAGE_REQUESTS),
   async (req, res, next) => {
     const { mediaType, tmdbId } = parseTitleParams(req.params);
-    const { kind, name, grp, info, seasonNumber } = req.body ?? {};
+    const { kind, name, grp, info, seasonNumber, versionLabel } =
+      req.body ?? {};
     if (!VALID_KINDS.includes(kind) || isNaN(tmdbId)) {
       return next({ status: 400, message: 'kind must be disc, remux or encode.' });
     }
@@ -64,6 +65,7 @@ sourcesRoutes.post(
           name: String(name ?? ''),
           grp: String(grp ?? ''),
           info: String(info ?? ''),
+          versionLabel: String(versionLabel ?? ''),
           seasonNumber:
             seasonNumber === null || seasonNumber === undefined
               ? null
@@ -96,6 +98,9 @@ sourcesRoutes.put(
       if (name !== undefined) source.name = String(name);
       if (grp !== undefined) source.grp = String(grp);
       if (info !== undefined) source.info = String(info);
+      if (req.body?.versionLabel !== undefined) {
+        source.versionLabel = String(req.body.versionLabel);
+      }
       if (seasonNumber !== undefined) {
         source.seasonNumber = seasonNumber === null ? null : Number(seasonNumber);
       }
@@ -218,6 +223,7 @@ const writeTitleToArchive = async (
       `Name: ${source.name}`,
       `Kind: ${source.kind}`,
       ...(source.grp ? [`Group: ${source.grp}`] : []),
+      ...(source.versionLabel ? [`Version: ${source.versionLabel}`] : []),
       ...(source.seasonNumber !== null && source.seasonNumber !== undefined
         ? [`Season: ${source.seasonNumber}`]
         : []),
