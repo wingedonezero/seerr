@@ -203,6 +203,9 @@ gridRoutes.get('/episodes/:mediaType/:tmdbId', async (req, res, next) => {
       available: boolean;
     };
     const bySeason = new Map<number, DisplayEp[]>();
+    // aired seasons with zero mapped episodes (typically Specials) — they
+    // keep their own aired rows in the ordered season view
+    const airedMapped = new Map<number, { mapped: number; total: number }>();
     for (const ep of episodes) {
       let s: number | null = null;
       let e: number | null = null;
@@ -216,6 +219,12 @@ gridRoutes.get('/episodes/:mediaType/:tmdbId', async (req, res, next) => {
         s = ep.seasonNumber;
         e = ep.episodeNumber;
       }
+      const stat = airedMapped.get(ep.seasonNumber) ?? { mapped: 0, total: 0 };
+      stat.total++;
+      if (s !== null && e !== null) {
+        stat.mapped++;
+      }
+      airedMapped.set(ep.seasonNumber, stat);
       if (s === null || e === null) {
         continue;
       }
@@ -241,6 +250,12 @@ gridRoutes.get('/episodes/:mediaType/:tmdbId', async (req, res, next) => {
       detected: meta.detectedOrder,
       override: meta.orderOverride,
       seasons,
+      unmappedSeasons: [...airedMapped.entries()]
+        .filter(([, stat]) => stat.mapped === 0)
+        .map(([seasonNumber, stat]) => ({
+          seasonNumber,
+          episodeCount: stat.total,
+        })),
     });
   } catch (e) {
     return next({ status: 500, message: e.message });

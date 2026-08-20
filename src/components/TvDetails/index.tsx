@@ -143,6 +143,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
       episodeCount: number;
       episodes: OrderedEpisode[];
     }[];
+    unmappedSeasons: { seasonNumber: number; episodeCount: number }[];
   }>(`/api/v1/grid/episodes/tv/${router.query.tvId}`);
   const orderActive =
     orderedData &&
@@ -901,11 +902,10 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                         posterPath: '',
                       }
                   ),
-                  ...data.seasons.filter(
-                    (a) =>
-                      !orderedData.seasons.some(
-                        (o) => o.seasonNumber === a.seasonNumber
-                      )
+                  ...data.seasons.filter((a) =>
+                    (orderedData.unmappedSeasons ?? []).some(
+                      (u) => u.seasonNumber === a.seasonNumber
+                    )
                   ),
                 ].sort((a, b) => a.seasonNumber - b.seasonNumber)
               : data.seasons
