@@ -32,6 +32,15 @@ export interface OrderAssessment {
   expectedBySeason: Map<number, number>;
   /** exact expected episode numbers per season — enables set-coverage checks */
   expectedNumbersBySeason: Map<number, Set<number>>;
+  /**
+   * Translation from effective-order position back to aired positions:
+   * "s:e" (effective) -> aired (season, episode) pairs. One effective episode
+   * can map to several aired ones (a disc combining an aired two-parter) and
+   * across seasons (a miniseries filed as S1E1-E2 maps to aired specials).
+   * Grading aired seasons through this map keeps request fulfillment exact
+   * in every ordering.
+   */
+  toAired: Map<string, [number, number][]>;
 }
 
 const normalize = (s: string) =>
@@ -147,5 +156,33 @@ export const assessOrder = async (
     [...expectedNumbersBySeason.entries()].map(([s, set]) => [s, set.size])
   );
 
-  return { detected, effective, expectedBySeason, expectedNumbersBySeason };
+  const toAired = new Map<string, [number, number][]>();
+  const addMapping = (key: string, s: number, e: number) => {
+    const list = toAired.get(key) ?? [];
+    list.push([s, e]);
+    toAired.set(key, list);
+  };
+  for (const ep of episodes) {
+    if (effective === 'dvd') {
+      if (ep.dvdSeasonNumber != null && ep.dvdEpisodeNumber != null) {
+        addMapping(
+          `${ep.dvdSeasonNumber}:${ep.dvdEpisodeNumber}`,
+          ep.seasonNumber,
+          ep.episodeNumber
+        );
+      }
+    } else if (effective === 'absolute') {
+      if (ep.absoluteNumber != null) {
+        addMapping(`1:${ep.absoluteNumber}`, ep.seasonNumber, ep.episodeNumber);
+      }
+    }
+  }
+
+  return {
+    detected,
+    effective,
+    expectedBySeason,
+    expectedNumbersBySeason,
+    toAired,
+  };
 };

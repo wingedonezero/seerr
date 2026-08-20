@@ -475,35 +475,31 @@ class JellyfinScanner
             assessment.effective !== 'aired' &&
             assessment.expectedBySeason.size > 0
           ) {
-            // Set-coverage instead of arithmetic counts: expand combined
-            // files (IndexNumberEnd spans), dedupe overlaps, and intersect
-            // with the expected episode numbers — a season is complete when
-            // every expected number is covered, however the files slice it.
-            const coveredBySeason = new Map<number, Set<number>>();
+            // Grade AIRED seasons (the currency requests are made in) by
+            // translating what the library covers back to aired positions
+            // through the ordering map: file spans expand (combined
+            // episodes), one disc episode may credit several aired ones
+            // (combined two-parters), and credits can cross seasons (a
+            // miniseries filed as S1E1-E2 credits the aired specials). This
+            // keeps request fulfillment exact in every ordering — including
+            // absolute, where the whole library sits in Jellyfin's S1.
+            const airedCovered = new Map<number, Set<number>>();
             for (const t of jellyfinTuples) {
-              const set =
-                coveredBySeason.get(t.seasonNumber) ?? new Set<number>();
               const end = t.endEpisodeNumber ?? t.episodeNumber;
               for (let n = t.episodeNumber; n <= end; n++) {
-                set.add(n);
+                for (const [as, ae] of assessment.toAired.get(
+                  `${t.seasonNumber}:${n}`
+                ) ?? []) {
+                  const set = airedCovered.get(as) ?? new Set<number>();
+                  set.add(ae);
+                  airedCovered.set(as, set);
+                }
               }
-              coveredBySeason.set(t.seasonNumber, set);
             }
             for (const ps of processableSeasons) {
-              const expected = assessment.expectedNumbersBySeason.get(
-                ps.seasonNumber
-              );
-              ps.totalEpisodes = expected?.size ?? 0;
-              const covered = coveredBySeason.get(ps.seasonNumber);
-              if (expected && covered) {
-                let hit = 0;
-                for (const n of expected) {
-                  if (covered.has(n)) {
-                    hit++;
-                  }
-                }
-                ps.episodes = hit;
-              }
+              // totalEpisodes stays the aired count the provider reported;
+              // only the covered tally is replaced with translated coverage.
+              ps.episodes = airedCovered.get(ps.seasonNumber)?.size ?? 0;
             }
           }
         } catch (e) {
