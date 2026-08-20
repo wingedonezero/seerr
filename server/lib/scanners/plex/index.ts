@@ -13,6 +13,7 @@ import { User } from '@server/entity/User';
 import cacheManager from '@server/lib/cache';
 import type {
   MediaIds,
+  ProcessableEpisode,
   ProcessableSeason,
   RunnableScanner,
   StatusBase,
@@ -27,6 +28,9 @@ const tmdbRegex = new RegExp(/tmdb:\/\/([0-9]+)/);
 const tvdbRegex = new RegExp(/tvdb:\/\/([0-9]+)/);
 const tmdbShowRegex = new RegExp(/themoviedb:\/\/([0-9]+)/);
 const plexRegex = new RegExp(/plex:\/\//);
+const plexCustomProviderRegex = new RegExp(
+  /tv\.plex\.agents\.custom(\.[a-zA-Z0-9]+)+:\/\//
+);
 // Hama agent uses ASS naming, see details here:
 // https://github.com/ZeroQI/Absolute-Series-Scanner/blob/master/README.md#forcing-the-movieseries-id
 const hamaTvdbRegex = new RegExp(/hama:\/\/tvdb[0-9]?-([0-9]+)/);
@@ -337,25 +341,48 @@ class PlexScanner
         const episodes = await this.plexClient.getChildrenMetadata(
           matchedPlexSeason.ratingKey
         );
-        // Total episodes that are in standard definition (not 4k)
-        const totalStandard = episodes.filter((episode) =>
-          !this.enable4kShow
-            ? true
-            : episode.Media.some((media) => media.videoResolution !== '4k')
-        ).length;
+        let totalStandard = 0;
+        let total4k = 0;
+        const episodeDetails: ProcessableEpisode[] | undefined = settings.main
+          .enableEpisodeAvailability
+          ? []
+          : undefined;
 
-        // Total episodes that are in 4k
-        const total4k = this.enable4kShow
-          ? episodes.filter((episode) =>
-              episode.Media.some((media) => media.videoResolution === '4k')
-            ).length
-          : 0;
+        for (const episode of episodes) {
+          const versions = episode.Media ?? [];
+          const hasStandard = this.enable4kShow
+            ? versions.some((media) => media.videoResolution !== '4k')
+            : versions.length > 0;
+          const has4k =
+            this.enable4kShow &&
+            versions.some((media) => media.videoResolution === '4k');
+
+          if (hasStandard) {
+            totalStandard += 1;
+          }
+          if (has4k) {
+            total4k += 1;
+          }
+
+          if (
+            episodeDetails &&
+            episode.index != null &&
+            (hasStandard || has4k)
+          ) {
+            episodeDetails.push({
+              episodeNumber: episode.index,
+              hasFile: hasStandard,
+              hasFile4k: has4k,
+            });
+          }
+        }
 
         processableSeasons.push({
           seasonNumber: season.season_number,
           episodes: totalStandard,
           episodes4k: total4k,
           totalEpisodes: season.episode_count,
+          episodeDetails,
         });
       } else {
         processableSeasons.push({
@@ -382,7 +409,10 @@ class PlexScanner
   private async getMediaIds(plexitem: PlexLibraryItem): Promise<MediaIds> {
     let mediaIds: Partial<MediaIds> = {};
     // Check if item is using new plex movie/tv agent
-    if (plexitem.guid.match(plexRegex)) {
+    if (
+      plexitem.guid.match(plexRegex) ||
+      plexitem.guid.match(plexCustomProviderRegex)
+    ) {
       const guidCache = cacheManager.getCache('plexguid');
 
       const cachedGuids = guidCache.data.get<MediaIds>(plexitem.ratingKey);
