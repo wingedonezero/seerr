@@ -7185,6 +7185,104 @@ paths:
                       $ref: '#/components/schemas/CreditCrew'
                   id:
                     type: number
+  /grid:
+    get:
+      summary: Get the whole-library grid
+      description: Every media item joined with its durable metadata row (local database only) — feeds the Requests and Library grid pages.
+      tags:
+        - grid
+      responses:
+        '200':
+          description: Grid items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                  hydrated:
+                    type: number
+                  refresh:
+                    type: object
+                    properties:
+                      running:
+                        type: boolean
+                      progress:
+                        type: number
+                      total:
+                        type: number
+  /grid/refresh:
+    post:
+      summary: Run the metadata hydration/refresh job now
+      tags:
+        - grid
+      responses:
+        '202':
+          description: Refresh started
+  /grid/refresh/{mediaType}/{tmdbId}:
+    post:
+      summary: Refresh one title's metadata immediately
+      tags:
+        - grid
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Updated metadata row
+  /grid/ack-new-seasons/{mediaType}/{tmdbId}:
+    post:
+      summary: Clear the new-season flag for a title
+      tags:
+        - grid
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Flag cleared
+  /grid/bulk-delete-requests:
+    post:
+      summary: Bulk-delete requests by id
+      tags:
+        - grid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - requestIds
+              properties:
+                requestIds:
+                  type: array
+                  items:
+                    type: number
+      responses:
+        '200':
+          description: Deleted count
   /media:
     get:
       summary: Get media
