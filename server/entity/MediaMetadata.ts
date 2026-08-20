@@ -65,6 +65,25 @@ class MediaMetadata {
   @Column({ nullable: true, type: 'varchar' })
   public releaseDate?: string | null;
 
+  /** JSON: genre names, e.g. ["Action","Drama"] */
+  @Column({ type: 'text', default: '[]' })
+  public genres: string;
+
+  /** movies: runtime; tv: typical episode runtime (minutes) */
+  @Column({ nullable: true, type: 'int' })
+  public runtime?: number | null;
+
+  /** US certification / content rating when known (PG-13, TV-MA, …) */
+  @Column({ type: 'varchar', default: '' })
+  public certification: string;
+
+  @Column({ type: 'varchar', default: '' })
+  public backdropPath: string;
+
+  /** tv: first network name */
+  @Column({ type: 'varchar', default: '' })
+  public network: string;
+
   /** JSON: [{ seasonNumber, episodeCount, airDate }] — includes season 0 */
   @Column({ type: 'text', default: '[]' })
   public seasons: string;

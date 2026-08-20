@@ -6,6 +6,7 @@ import { MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import MediaMetadata from '@server/entity/MediaMetadata';
+import MetadataEpisode from '@server/entity/MetadataEpisode';
 import logger from '@server/logger';
 
 /**
@@ -138,25 +139,111 @@ class MetadataRefresh {
       row.year =
         parseInt((tv.first_air_date ?? '').slice(0, 4), 10) || null;
       row.posterPath = tv.poster_path ?? '';
+      row.backdropPath = tv.backdrop_path ?? '';
       row.overview = tv.overview ?? '';
       row.seriesStatus = tv.status ?? '';
       row.lastAirDate = tv.last_air_date ?? null;
       row.seasons = JSON.stringify(seasons);
+      row.genres = JSON.stringify((tv.genres ?? []).map((g) => g.name));
+      row.runtime = tv.episode_run_time?.[0] ?? null;
+      row.network = tv.networks?.[0]?.name ?? '';
+      row.certification =
+        tv.content_ratings?.results?.find((r) => r.iso_3166_1 === 'US')
+          ?.rating ?? '';
       row.tvdbId = tmdbTv.external_ids?.tvdb_id ?? row.tvdbId ?? null;
       row.imdbId = tmdbTv.external_ids?.imdb_id ?? row.imdbId ?? null;
-    } else {
-      const movie = await tmdb.getMovie({ movieId: tmdbId });
-      row.title = movie.title ?? '';
-      row.originalTitle = movie.original_title ?? '';
-      row.year = parseInt((movie.release_date ?? '').slice(0, 4), 10) || null;
-      row.posterPath = movie.poster_path ?? '';
-      row.overview = movie.overview ?? '';
-      row.releaseDate = movie.release_date ?? null;
-      row.imdbId = movie.external_ids?.imdb_id ?? row.imdbId ?? null;
+
+      const saved = await metadataRepository.save(
+        Object.assign(row, { lastRefreshedAt: new Date() })
+      );
+      await this.syncEpisodes(saved, provider, seasons);
+      return saved;
     }
+
+    const movie = await tmdb.getMovie({ movieId: tmdbId });
+    row.title = movie.title ?? '';
+    row.originalTitle = movie.original_title ?? '';
+    row.year = parseInt((movie.release_date ?? '').slice(0, 4), 10) || null;
+    row.posterPath = movie.poster_path ?? '';
+    row.backdropPath = movie.backdrop_path ?? '';
+    row.overview = movie.overview ?? '';
+    row.releaseDate = movie.release_date ?? null;
+    row.genres = JSON.stringify((movie.genres ?? []).map((g) => g.name));
+    row.runtime = movie.runtime ?? null;
+    row.certification =
+      movie.release_dates?.results
+        ?.find((r) => r.iso_3166_1 === 'US')
+        ?.release_dates?.find((d) => d.certification)?.certification ?? '';
+    row.imdbId = movie.external_ids?.imdb_id ?? row.imdbId ?? null;
 
     row.lastRefreshedAt = new Date();
     return metadataRepository.save(row);
+  }
+
+  /**
+   * Change-limited per-episode sync: a season's episodes are (re)fetched only
+   * when we hold a different number of rows than the provider reports, or for
+   * the newest season of a still-airing show (titles/dates firm up there).
+   */
+  private async syncEpisodes(
+    row: MediaMetadata,
+    provider: Awaited<ReturnType<typeof getMetadataProvider>> | TheMovieDb,
+    seasons: SeasonSummary[]
+  ): Promise<void> {
+    const episodeRepository = getRepository(MetadataEpisode);
+    const stored = await episodeRepository.find({
+      where: { metadata: { id: row.id } },
+      relations: { metadata: false },
+    });
+    const storedPerSeason = new Map<number, number>();
+    for (const e of stored) {
+      storedPerSeason.set(
+        e.seasonNumber,
+        (storedPerSeason.get(e.seasonNumber) ?? 0) + 1
+      );
+    }
+    const ongoing = ONGOING_STATUSES.includes(row.seriesStatus);
+    const newestSeason = Math.max(0, ...seasons.map((s) => s.seasonNumber));
+
+    for (const season of seasons) {
+      const have = storedPerSeason.get(season.seasonNumber) ?? 0;
+      const isLiveSeason = ongoing && season.seasonNumber === newestSeason;
+      if (have === season.episodeCount && !isLiveSeason) {
+        continue;
+      }
+      try {
+        const data = await provider.getTvSeason({
+          tvId: row.tmdbId,
+          seasonNumber: season.seasonNumber,
+        });
+        await episodeRepository.manager.transaction(async (em) => {
+          await em.delete(MetadataEpisode, {
+            metadata: { id: row.id },
+            seasonNumber: season.seasonNumber,
+          });
+          for (const ep of data.episodes ?? []) {
+            await em.save(
+              new MetadataEpisode({
+                metadata: row,
+                seasonNumber: season.seasonNumber,
+                episodeNumber: ep.episode_number,
+                title: ep.name ?? '',
+                airDate: ep.air_date ?? null,
+                overview: ep.overview ?? '',
+                runtime: (ep as { runtime?: number }).runtime ?? null,
+                providerEpisodeId: ep.id ?? null,
+              })
+            );
+          }
+        });
+      } catch (e) {
+        logger.warn(
+          `Episode sync failed for tmdb:${row.tmdbId} S${season.seasonNumber}: ${e.message}`,
+          { label: 'Metadata Refresh' }
+        );
+      }
+      await sleep(PACE_MS);
+    }
   }
 
   /** Clear the new-season flag once the user has seen/acted on it. */
