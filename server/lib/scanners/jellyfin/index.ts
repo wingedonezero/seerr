@@ -342,6 +342,10 @@ class JellyfinScanner
                       matchedJellyfinSeason.IndexNumber ?? season.season_number
                     ),
                     episodeNumber: Number(episode.IndexNumber),
+                    endEpisodeNumber:
+                      episode.IndexNumberEnd != null
+                        ? Number(episode.IndexNumberEnd)
+                        : undefined,
                     name: episode.Name ?? '',
                   });
                 }
@@ -404,6 +408,10 @@ class JellyfinScanner
                       matchedJellyfinSeason.IndexNumber ?? season.season_number
                     ),
                     episodeNumber: Number(episode.IndexNumber),
+                    endEpisodeNumber:
+                      episode.IndexNumberEnd != null
+                        ? Number(episode.IndexNumberEnd)
+                        : undefined,
                     name: episode.Name ?? '',
                   });
                 }
@@ -467,9 +475,35 @@ class JellyfinScanner
             assessment.effective !== 'aired' &&
             assessment.expectedBySeason.size > 0
           ) {
+            // Set-coverage instead of arithmetic counts: expand combined
+            // files (IndexNumberEnd spans), dedupe overlaps, and intersect
+            // with the expected episode numbers — a season is complete when
+            // every expected number is covered, however the files slice it.
+            const coveredBySeason = new Map<number, Set<number>>();
+            for (const t of jellyfinTuples) {
+              const set =
+                coveredBySeason.get(t.seasonNumber) ?? new Set<number>();
+              const end = t.endEpisodeNumber ?? t.episodeNumber;
+              for (let n = t.episodeNumber; n <= end; n++) {
+                set.add(n);
+              }
+              coveredBySeason.set(t.seasonNumber, set);
+            }
             for (const ps of processableSeasons) {
-              ps.totalEpisodes =
-                assessment.expectedBySeason.get(ps.seasonNumber) ?? 0;
+              const expected = assessment.expectedNumbersBySeason.get(
+                ps.seasonNumber
+              );
+              ps.totalEpisodes = expected?.size ?? 0;
+              const covered = coveredBySeason.get(ps.seasonNumber);
+              if (expected && covered) {
+                let hit = 0;
+                for (const n of expected) {
+                  if (covered.has(n)) {
+                    hit++;
+                  }
+                }
+                ps.episodes = hit;
+              }
             }
           }
         } catch (e) {

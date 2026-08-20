@@ -18,6 +18,8 @@ import logger from '@server/logger';
 export interface JellyfinEpisodeTuple {
   seasonNumber: number;
   episodeNumber: number;
+  /** last episode a combined file spans (IndexNumberEnd), if any */
+  endEpisodeNumber?: number;
   name: string;
 }
 
@@ -28,6 +30,8 @@ export interface OrderAssessment {
   effective: 'aired' | 'dvd' | 'absolute';
   /** expected episode count per season in the effective ordering */
   expectedBySeason: Map<number, number>;
+  /** exact expected episode numbers per season — enables set-coverage checks */
+  expectedNumbersBySeason: Map<number, Set<number>>;
 }
 
 const normalize = (s: string) =>
@@ -116,29 +120,32 @@ export const assessOrder = async (
       ? 'absolute'
       : 'aired') as OrderAssessment['effective'];
 
-  const expectedBySeason = new Map<number, number>();
+  const expectedNumbersBySeason = new Map<number, Set<number>>();
+  const addExpected = (s: number, e: number) => {
+    const set = expectedNumbersBySeason.get(s) ?? new Set<number>();
+    set.add(e);
+    expectedNumbersBySeason.set(s, set);
+  };
   if (effective === 'dvd') {
     for (const ep of episodes) {
-      if (ep.dvdSeasonNumber != null) {
-        expectedBySeason.set(
-          ep.dvdSeasonNumber,
-          (expectedBySeason.get(ep.dvdSeasonNumber) ?? 0) + 1
-        );
+      if (ep.dvdSeasonNumber != null && ep.dvdEpisodeNumber != null) {
+        addExpected(ep.dvdSeasonNumber, ep.dvdEpisodeNumber);
       }
     }
   } else if (effective === 'absolute') {
-    expectedBySeason.set(
-      1,
-      episodes.filter((e) => e.absoluteNumber != null).length
-    );
+    for (const ep of episodes) {
+      if (ep.absoluteNumber != null) {
+        addExpected(1, ep.absoluteNumber);
+      }
+    }
   } else {
     for (const ep of episodes) {
-      expectedBySeason.set(
-        ep.seasonNumber,
-        (expectedBySeason.get(ep.seasonNumber) ?? 0) + 1
-      );
+      addExpected(ep.seasonNumber, ep.episodeNumber);
     }
   }
+  const expectedBySeason = new Map<number, number>(
+    [...expectedNumbersBySeason.entries()].map(([s, set]) => [s, set.size])
+  );
 
-  return { detected, effective, expectedBySeason };
+  return { detected, effective, expectedBySeason, expectedNumbersBySeason };
 };
