@@ -41,6 +41,19 @@ export interface OrderAssessment {
    * in every ordering.
    */
   toAired: Map<string, [number, number][]>;
+  /**
+   * Per aired season: how many episodes exist, how many carry effective-order
+   * numbers, and which effective season most of them live in. TVDB's
+   * alternate-order data is sometimes incomplete for older shows — these
+   * stats let the scanner credit unmapped aired episodes from surplus
+   * library coverage (files at effective positions TVDB never mapped).
+   */
+  airedSeasonStats: Map<
+    number,
+    { total: number; mapped: number; effSeason: number | null }
+  >;
+  /** every effective position TVDB mapped, per effective season */
+  effMappedPositions: Map<number, Set<number>>;
 }
 
 const normalize = (s: string) =>
@@ -178,11 +191,56 @@ export const assessOrder = async (
     }
   }
 
+  const airedSeasonStats = new Map<
+    number,
+    { total: number; mapped: number; effSeason: number | null }
+  >();
+  const effMappedPositions = new Map<number, Set<number>>();
+  const effSeasonVotes = new Map<number, Map<number, number>>();
+  for (const ep of episodes) {
+    const stat = airedSeasonStats.get(ep.seasonNumber) ?? {
+      total: 0,
+      mapped: 0,
+      effSeason: null,
+    };
+    stat.total++;
+    let effS: number | null = null;
+    let effE: number | null = null;
+    if (effective === 'dvd') {
+      effS = ep.dvdSeasonNumber ?? null;
+      effE = ep.dvdEpisodeNumber ?? null;
+    } else if (effective === 'absolute') {
+      effS = ep.absoluteNumber != null ? 1 : null;
+      effE = ep.absoluteNumber ?? null;
+    } else {
+      effS = ep.seasonNumber;
+      effE = ep.episodeNumber;
+    }
+    if (effS != null && effE != null) {
+      stat.mapped++;
+      const positions = effMappedPositions.get(effS) ?? new Set<number>();
+      positions.add(effE);
+      effMappedPositions.set(effS, positions);
+      const votes = effSeasonVotes.get(ep.seasonNumber) ?? new Map();
+      votes.set(effS, (votes.get(effS) ?? 0) + 1);
+      effSeasonVotes.set(ep.seasonNumber, votes);
+    }
+    airedSeasonStats.set(ep.seasonNumber, stat);
+  }
+  for (const [aired, stat] of airedSeasonStats) {
+    const votes = effSeasonVotes.get(aired);
+    if (votes) {
+      stat.effSeason = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    }
+  }
+
   return {
     detected,
     effective,
     expectedBySeason,
     expectedNumbersBySeason,
     toAired,
+    airedSeasonStats,
+    effMappedPositions,
   };
 };

@@ -1,4 +1,5 @@
 import { getRepository } from '@server/datasource';
+import MediaMetadata from '@server/entity/MediaMetadata';
 import MediaVersion from '@server/entity/MediaVersion';
 
 /**
@@ -66,7 +67,17 @@ export const recordVersion = async ({
   coverage: VersionCoverage[];
 }): Promise<boolean> => {
   const repo = getRepository(MediaVersion);
-  const label = parseVersionLabel(entryTitle, canonicalTitle, year);
+  let label = parseVersionLabel(entryTitle, canonicalTitle, year);
+  if (label === '' && entryTitle.includes(' - ')) {
+    // Jellyfin doesn't always return an original title (movies especially) —
+    // retry against our own durable metadata title before concluding "main".
+    const meta = await getRepository(MediaMetadata).findOne({
+      where: { tmdbId, mediaType },
+    });
+    if (meta?.title) {
+      label = parseVersionLabel(entryTitle, meta.title, meta.year ?? year);
+    }
+  }
   const isMain = label === '';
 
   const existing = await repo.findOne({

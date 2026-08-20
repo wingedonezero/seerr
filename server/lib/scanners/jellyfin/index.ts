@@ -521,10 +521,49 @@ class JellyfinScanner
                 }
               }
             }
+            // surplus: library coverage at effective positions TVDB never
+            // mapped — the telltale of incomplete alternate-order data on
+            // older shows. Used to credit unmapped aired episodes, capped
+            // per season so fully-mapped data can never be inflated.
+            const surplus = new Map<number, number>();
+            {
+              const coveredEff = new Map<number, Set<number>>();
+              for (const t of jellyfinTuples) {
+                const set =
+                  coveredEff.get(t.seasonNumber) ?? new Set<number>();
+                const end = t.endEpisodeNumber ?? t.episodeNumber;
+                for (let n = t.episodeNumber; n <= end; n++) {
+                  set.add(n);
+                }
+                coveredEff.set(t.seasonNumber, set);
+              }
+              for (const [effS, set] of coveredEff) {
+                const mapped = assessment.effMappedPositions.get(effS);
+                let extra = 0;
+                for (const n of set) {
+                  if (!mapped?.has(n)) {
+                    extra++;
+                  }
+                }
+                surplus.set(effS, extra);
+              }
+            }
+
             for (const ps of processableSeasons) {
               // totalEpisodes stays the aired count the provider reported;
-              // only the covered tally is replaced with translated coverage.
-              ps.episodes = airedCovered.get(ps.seasonNumber)?.size ?? 0;
+              // the covered tally is the translated coverage, plus surplus
+              // credit for aired episodes TVDB left out of the mapping.
+              let covered = airedCovered.get(ps.seasonNumber)?.size ?? 0;
+              const stat = assessment.airedSeasonStats.get(ps.seasonNumber);
+              if (stat && stat.mapped < stat.total && stat.effSeason != null) {
+                const pool = surplus.get(stat.effSeason) ?? 0;
+                const credit = Math.min(stat.total - stat.mapped, pool);
+                if (credit > 0) {
+                  covered += credit;
+                  surplus.set(stat.effSeason, pool - credit);
+                }
+              }
+              ps.episodes = covered;
             }
           }
         } catch (e) {
