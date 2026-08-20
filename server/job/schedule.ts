@@ -2,6 +2,7 @@ import { MediaServerType } from '@server/constants/server';
 import blocklistedTagsProcessor from '@server/job/blocklistedTagsProcessor';
 import availabilitySync from '@server/lib/availabilitySync';
 import downloadTracker from '@server/lib/downloadtracker';
+import backupManager from '@server/lib/backups';
 import ImageProxy from '@server/lib/imageproxy';
 import metadataRefresh from '@server/lib/metadatarefresh';
 import refreshToken from '@server/lib/refreshToken';
@@ -275,6 +276,21 @@ export const startJobs = (): void => {
     }),
     running: () => metadataRefresh.status().running,
     cancelFn: () => metadataRefresh.cancel(),
+  });
+
+  // Daily snapshot zip (db + settings) into <config>/backups, keeps newest 14
+  scheduledJobs.push({
+    id: 'backup',
+    name: 'Backup',
+    type: 'process',
+    interval: 'days',
+    cronSchedule: jobs['backup'].schedule,
+    job: schedule.scheduleJob(jobs['backup'].schedule, () => {
+      logger.info('Starting scheduled job: Backup', { label: 'Jobs' });
+      backupManager.run();
+    }),
+    running: () => backupManager.status().running,
+    cancelFn: () => backupManager.cancel(),
   });
 
   logger.info('Scheduled jobs loaded', { label: 'Jobs' });

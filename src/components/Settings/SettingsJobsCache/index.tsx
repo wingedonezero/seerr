@@ -91,6 +91,7 @@ const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
     'image-cache-cleanup': 'Image Cache Cleanup',
     'process-blocklisted-tags': 'Process Blocklisted Tags',
     'metadata-refresh': 'Metadata Refresh',
+    backup: 'Backup',
     editJobSchedule: 'Modify Job',
     jobScheduleEditSaved: 'Job edited successfully!',
     jobScheduleEditFailed: 'Something went wrong while saving the job.',
@@ -189,6 +190,10 @@ const SettingsJobs = () => {
     refreshInterval: 5000,
   });
   const { data: appData } = useSWR('/api/v1/status/appdata');
+  const { data: backupData, mutate: revalidateBackups } = useSWR<{
+    backups: { name: string; size: number; createdAt: string }[];
+    running: boolean;
+  }>('/api/v1/settings/backups', { refreshInterval: 15000 });
   const { data: cacheData, mutate: cacheRevalidate } = useSWR<CacheResponse>(
     '/api/v1/settings/cache',
     {
@@ -556,6 +561,61 @@ const SettingsJobs = () => {
                 </Table.TD>
               </tr>
             ))}
+          </Table.TBody>
+        </Table>
+      </div>
+      <div>
+        <h3 className="heading">Backups</h3>
+        <p className="description">
+          A zip of the database and settings is written daily (newest 14 are
+          kept). Download one before big changes, or keep copies elsewhere.
+        </p>
+      </div>
+      <div className="section">
+        <div className="mb-4">
+          <Button
+            buttonType="primary"
+            disabled={backupData?.running}
+            onClick={async () => {
+              await axios.post('/api/v1/settings/backups/run');
+              revalidateBackups();
+            }}
+          >
+            <span>{backupData?.running ? 'Backing up…' : 'Back up now'}</span>
+          </Button>
+        </div>
+        <Table>
+          <thead>
+            <tr>
+              <Table.TH>Backup</Table.TH>
+              <Table.TH>Size</Table.TH>
+              <Table.TH />
+            </tr>
+          </thead>
+          <Table.TBody>
+            {(backupData?.backups ?? []).map((b) => (
+              <tr key={`backup-${b.name}`}>
+                <Table.TD>{b.name}</Table.TD>
+                <Table.TD>{formatBytes(b.size)}</Table.TD>
+                <Table.TD alignText="right">
+                  <Button
+                    buttonType="ghost"
+                    as="a"
+                    href={`/api/v1/settings/backups/download/${b.name}`}
+                  >
+                    <span>Download</span>
+                  </Button>
+                </Table.TD>
+              </tr>
+            ))}
+            {(backupData?.backups ?? []).length === 0 && (
+              <tr>
+                <Table.TD colSpan={3}>
+                  No backups yet — the first one is written by the daily job,
+                  or make one now.
+                </Table.TD>
+              </tr>
+            )}
           </Table.TBody>
         </Table>
       </div>

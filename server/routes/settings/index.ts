@@ -14,6 +14,7 @@ import type {
   SettingsAboutResponse,
 } from '@server/interfaces/api/settingsInterfaces';
 import { scheduledJobs } from '@server/job/schedule';
+import backupManager from '@server/lib/backups';
 import type { AvailableCacheIds } from '@server/lib/cache';
 import cacheManager from '@server/lib/cache';
 import ImageProxy from '@server/lib/imageproxy';
@@ -653,6 +654,29 @@ settingsRoutes.get(
     }
   }
 );
+
+settingsRoutes.get('/backups', async (_req, res) => {
+  return res.status(200).json({
+    backups: await backupManager.listBackups(),
+    running: backupManager.status().running,
+  });
+});
+
+settingsRoutes.post('/backups/run', async (_req, res, next) => {
+  const name = await backupManager.run();
+  if (!name) {
+    return next({ status: 500, message: 'Backup failed — check the logs.' });
+  }
+  return res.status(201).json({ name });
+});
+
+settingsRoutes.get('/backups/download/:name', (req, res, next) => {
+  const filePath = backupManager.backupPath(req.params.name);
+  if (!filePath) {
+    return next({ status: 404, message: 'No such backup.' });
+  }
+  return res.download(filePath);
+});
 
 settingsRoutes.get('/jobs', (_req, res) => {
   return res.status(200).json(

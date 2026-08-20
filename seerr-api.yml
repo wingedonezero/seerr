@@ -3004,6 +3004,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicSettings'
+  /settings/backups:
+    get:
+      summary: List backups
+      tags:
+        - settings
+      responses:
+        '200':
+          description: Backup files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backups:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        size:
+                          type: number
+                        createdAt:
+                          type: string
+                  running:
+                    type: boolean
+  /settings/backups/run:
+    post:
+      summary: Create a backup now
+      tags:
+        - settings
+      responses:
+        '201':
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+  /settings/backups/download/{name}:
+    get:
+      summary: Download a backup file
+      tags:
+        - settings
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backup zip
   /settings/jobs:
     get:
       summary: Get scheduled jobs

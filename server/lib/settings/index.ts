@@ -372,7 +372,8 @@ export type JobId =
   | 'image-cache-cleanup'
   | 'availability-sync'
   | 'process-blocklisted-tags'
-  | 'metadata-refresh';
+  | 'metadata-refresh'
+  | 'backup';
 
 export interface AllSettings {
   clientId: string;
@@ -615,6 +616,9 @@ class Settings {
         },
         'metadata-refresh': {
           schedule: '0 0 6 * * *',
+        },
+        backup: {
+          schedule: '0 30 5 * * *',
         },
       },
       network: {
