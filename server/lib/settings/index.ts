@@ -371,7 +371,8 @@ export type JobId =
   | 'jellyfin-full-scan'
   | 'image-cache-cleanup'
   | 'availability-sync'
-  | 'process-blocklisted-tags';
+  | 'process-blocklisted-tags'
+  | 'metadata-refresh';
 
 export interface AllSettings {
   clientId: string;
@@ -611,6 +612,9 @@ class Settings {
         },
         'process-blocklisted-tags': {
           schedule: '0 30 1 */7 * *',
+        },
+        'metadata-refresh': {
+          schedule: '0 0 6 * * *',
         },
       },
       network: {

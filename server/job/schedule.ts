@@ -3,6 +3,7 @@ import blocklistedTagsProcessor from '@server/job/blocklistedTagsProcessor';
 import availabilitySync from '@server/lib/availabilitySync';
 import downloadTracker from '@server/lib/downloadtracker';
 import ImageProxy from '@server/lib/imageproxy';
+import metadataRefresh from '@server/lib/metadatarefresh';
 import refreshToken from '@server/lib/refreshToken';
 import {
   jellyfinFullScanner,
@@ -257,6 +258,23 @@ export const startJobs = (): void => {
     }),
     running: () => blocklistedTagsProcessor.status().running,
     cancelFn: () => blocklistedTagsProcessor.cancel(),
+  });
+
+  // Hydrates/refreshes the durable media_metadata table (grid views, new-season detection)
+  scheduledJobs.push({
+    id: 'metadata-refresh',
+    name: 'Metadata Refresh',
+    type: 'process',
+    interval: 'days',
+    cronSchedule: jobs['metadata-refresh'].schedule,
+    job: schedule.scheduleJob(jobs['metadata-refresh'].schedule, () => {
+      logger.info('Starting scheduled job: Metadata Refresh', {
+        label: 'Jobs',
+      });
+      metadataRefresh.run();
+    }),
+    running: () => metadataRefresh.status().running,
+    cancelFn: () => metadataRefresh.cancel(),
   });
 
   logger.info('Scheduled jobs loaded', { label: 'Jobs' });
